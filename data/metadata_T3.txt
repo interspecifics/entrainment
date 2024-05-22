@@ -1,0 +1,12 @@
+metadata:
+----------------------------------------
+
+T3:
+C1: Armando
+C2: Mar
+C3: Angelica
+C4: Emme
+
+
+00:50 inicia T1 de Conference of The Trees
+12:00 finaliza registro con 72000 samples por canal

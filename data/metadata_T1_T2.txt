@@ -1,0 +1,19 @@
+metadata:
+----------------------------------------
+
+T1, T2:
+C1: Quetzalli
+C2: Mafu Sejmet
+C3: Jessi
+
+T1
+inicio amb:00:00
+inicio hb: 15000, 02:30
+
+T2
+st:amb: 0000
+st:hb: 12000
+fl:hb: 18000 piani
+
+T2p2:
+st: 50000 af
