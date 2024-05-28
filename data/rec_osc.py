@@ -14,10 +14,15 @@ ls4 = []
 fs4 = []
 a4 = 0
 
+from time import time
+
 def reco1(*values):
     global a1, fs1, ls1
     #print (values)
-    l = "{}\t{}\t{}\n".format(values[0], values[1], values[2])
+    if values[0] == 1:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+    else:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
     ls1.append(l)
     a1 = a1+1
     if a1%100==0:
@@ -29,7 +34,10 @@ def reco1(*values):
 def reco2(*values):
     global a2, fs2, ls2
     #print (values)
-    l = "{}\t{}\t{}\n".format(values[0], values[1], values[2])
+    if values[0] == 1:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+    else:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
     ls2.append(l)
     a2 = a2+1
     if a2%100==0:
@@ -41,7 +49,10 @@ def reco2(*values):
 def reco3(*values):
     global a3, fs3, ls3
     #print (values)
-    l = "{}\t{}\t{}\n".format(values[0], values[1], values[2])
+    if values[0] == 1:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+    else:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
     ls3.append(l)
     a3 = a3+1
     if a3%100==0:
@@ -53,7 +64,10 @@ def reco3(*values):
 def reco4(*values):
     global a4, fs4, ls4
     #print (values)
-    l = "{}\t{}\t{}\n".format(values[0], values[1], values[2])
+    if values[0] == 1:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+    else:
+        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
     ls4.append(l)
     a4 = a4+1
     if a4%100==0:
@@ -61,11 +75,24 @@ def reco4(*values):
         ls4.clear()
     #time.sleep(1)
     return
+import os
 
-fs4 = open("./T10/ECG_c4.txt",'w+')
-fs3 = open("./T10/ECG_c3.txt",'w+')
-fs2 = open("./T10/ECG_c2.txt",'w+')
-fs1 = open("./T10/ECG_c1.txt",'w+')
+def get_next_folder_name(base_path, base_folder_name):
+    folder_index = 1
+    while True:
+        folder_name = f"{base_folder_name}{folder_index}"
+        folder_path = os.path.join(base_path, folder_name)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            return folder_path
+        folder_index += 1
+
+folder_path = get_next_folder_name(".", "T")
+
+fs4 = open(os.path.join(folder_path, "ECG_c4.txt"), 'w+')
+fs3 = open(os.path.join(folder_path, "ECG_c3.txt"), 'w+')
+fs2 = open(os.path.join(folder_path, "ECG_c2.txt"), 'w+')
+fs1 = open(os.path.join(folder_path, "ECG_c1.txt"), 'w+')
 
 
 # osc server
@@ -80,7 +107,7 @@ server.listen()
 print ("[osc] listening on: {}".format(server.getaddress()))
 ## const init
 
-while(a3<72000 or a4<72000):
+while(a3<60000 or a4<60000):
 #while(a1<72000 or a2<72000 or a3<72000):
     b=0
     print (a1,' ',a2,' ',a3,' ',a4)
