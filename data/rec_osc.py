@@ -81,6 +81,7 @@ print ("[osc] listening on: {}".format(server.getaddress()))
 ## const init
 
 while(a3<72000 or a4<72000):
+#while(a1<72000 or a2<72000 or a3<72000):
     b=0
     print (a1,' ',a2,' ',a3,' ',a4)
 
