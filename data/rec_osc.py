@@ -99,15 +99,15 @@ fs1 = open(os.path.join(folder_path, "ECG_c1.txt"), 'w+')
 server = OSCThreadServer()
 socket = server.listen(address="0.0.0.0", port=8000, default=True)
 #server.bind(b'/codex/',     got_message,    socket)
-server.bind(b'/c1', reco1, socket)
-server.bind(b'/c2', reco2, socket)
-server.bind(b'/c3', reco3, socket)
-server.bind(b'/c4', reco4, socket)
+server.bind(b'/r1', reco1, socket)
+server.bind(b'/r2', reco2, socket)
+server.bind(b'/r3', reco3, socket)
+server.bind(b'/r4', reco4, socket)
 server.listen()
 print ("[osc] listening on: {}".format(server.getaddress()))
 ## const init
 
-while(a3<60000 or a4<60000):
+while(a1<60000 or a2<60000):
 #while(a1<72000 or a2<72000 or a3<72000):
     b=0
     print (a1,' ',a2,' ',a3,' ',a4)
@@ -117,3 +117,10 @@ fs2.close()
 fs3.close()
 fs4.close()
 
+
+
+# T1 y T2> miriam y lino
+# T3 y T4> miriam y leonora
+# T5 bad ana, felipe, alfredo
+# T6, T7 bad triple
+# T8 alf y ana

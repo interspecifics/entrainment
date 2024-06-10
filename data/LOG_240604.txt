@@ -1,0 +1,31 @@
+24.06.04
+\------------
+
+1. clasificador
+> recibe como entradas la senal de pulsos que corresponden a los latidos
+> extrae atributos y crea un vector de representaci'on para el ultimo evento (set de pulsos en todos los canales)
+> clasifica el vector de representaci'on para cada evento
+> envia por streaming la categoria resultante
+
+
+
+2. comunicaciones
+> los sensores envian dos flujos de datos:
+    a. RAW signal, all data 100 msg/sec
+    b. PULSE train, a pulse everytime a beat is detected by sensor, 1-2 msg/sec
+> la pc de Emme clasifica el PULSE train y genera 
+    c. un CLASS train
+
+> las computadoras que reciben:
+    I. Less.AUDIO           -- PULSE train
+    II. Feli.PANTALLAS      -- PULSE train
+    III. Feli.PROYECTOR     -- RAW signal
+    IV. Emme.ANALYZER       -- PULSE train
+    
+    V. Less.AUDIO           -- CLASS train    
+    VI. Feli.PROY           -- CLASS train
+
+
+3. es m'as simple si usa mi pc como HUB para recibir tanto RAW signal como PULSE train y desde all'i despacho a:
+ 
+ 
