@@ -5,6 +5,9 @@ Rupert Spira
   
 **interspecifics**
 
+![image](ECG_device/sensores.png)
+
+
 # entrainment
 
 Entrainment es un entorno performativo transmedial que revela estados de coherencia cardíaca en respuesta a la escucha activa y en tiempo real de los latidos del corazón humano. Compuesta en vivo y de manera colaborativa, Entrainment presenta una sutil melodía que refleja sobre procesos de coherencia afectiva llendo del caos al unísono y viceversa.   
@@ -25,5 +28,5 @@ Must be uploaded to the ESP32-S2-DevKit-C devices with custom ECG sensor adapter
 
 
 ---
-![image](https://github.com/interspecifics/entrainment/assets/12953522/b424808c-a767-4a67-99a7-af5a44c6417a)
+![image](ECG_device/sistema.jpeg)
 
