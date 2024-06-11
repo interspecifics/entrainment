@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from time import time
 
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
+
 nams=['Beat detection','Raw ECG','Moving Average']
 
 past_ts = [[0 for i in range(5)] for j in range(4)]
@@ -132,12 +135,28 @@ def update_plot(frame):
             vals_c4[i].append(latest_v_c4)
             if len(vals_c4[i]) > MAX_QUEUE_SIZE:
                 vals_c4[i].pop(0)  # Remove the old vals if list exceeds max size
-        ax[i].clear()
-        ax[i].plot(vals_c1[i], linestyle='-', color='r')
-        ax[i].plot(vals_c2[i], linestyle='-', color='g')
-        ax[i].plot(vals_c3[i], linestyle='-', color='b')
-        ax[i].plot(vals_c4[i], linestyle='-', color='k')
-        ax[i].set_title(f"{nams[i]}> T:{d0[3]:.4f}, bpm:{bpms[3]:.2f}, mbpm:{bpmsm[3]:.2f}")
+        
+        
+        if i== 1: 
+            ax[0].clear()
+            ax[2].clear()
+            
+            ax[0].plot(vals_c1[i], linestyle='-', color='white',alpha=0.4)
+            ax[0].plot(vals_c2[i], linestyle='-', color='white',alpha=0.4)
+            ax[0].plot(vals_c3[i], linestyle='-', color='white',alpha=0.4)
+            ax[0].plot(vals_c4[i], linestyle='-', color='white',alpha=0.4)
+            ax[0].set_ylim(4000,7000)
+
+            ax[2].plot(vals_c1[i], linestyle='-', color='white',alpha=0.4)
+            ax[2].plot(vals_c2[i], linestyle='-', color='white',alpha=0.4)
+            ax[2].plot(vals_c3[i], linestyle='-', color='white',alpha=0.4)
+            ax[2].plot(vals_c4[i], linestyle='-', color='white',alpha=0.4)
+            ax[2].set_ylim(4000,7000)
+
+        # ax[i].axis('off')
+        ax[i].set_facecolor('black')
+
+        # ax[i].set_title(f"{nams[i]}> T:{d0[3]:.4f}, bpm:{bpms[3]:.2f}, mbpm:{bpmsm[3]:.2f}")
         #ax[i].set_xlabel("BufferPos")
         #ax[i].set_ylabel("Value")
         lines.append(ax[i])
@@ -163,8 +182,21 @@ if __name__ == "__main__":
     server.listen()
 
     # Set up the real-time plot
-    fig, ax = plt.subplots(3, 1, figsize = (16, 9))  # Create 3 subplots for 3 signals
+    fig, ax = plt.subplots(3, 1, figsize = (20, 12))  # Create 3 subplots for 3 signals
+    fig.set_facecolor('black')
+    for a in ax: 
+        a.axis('off')
+        a.set_facecolor('black')
     #plt.figtext(200, 100, "Period: {}".format(ts[2]))
     ani = animation.FuncAnimation(fig, update_plot, interval=10, cache_frame_data=False)  # Update every 10 ms
 
-    plt.show()  # Display the plot
+
+    root = tk.Tk()
+    root.attributes('-fullscreen', True)
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH)
+
+    plt.close(fig)
+    root.mainloop()
+    # plt.show()  # Display the plot
