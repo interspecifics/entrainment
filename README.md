@@ -25,5 +25,5 @@ Must be uploaded to the ESP32-S2-DevKit-C devices with custom ECG sensor adapter
 
 
 ---
-![image](https://github.com/interspecifics/entrainment/assets/12953522/b424808c-a767-4a67-99a7-af5a44c6417a)
+![image]([https://github.com/interspecifics/entrainment/assets/12953522/b424808c-a767-4a67-99a7-af5a44c6417a](https://github.com/interspecifics/entrainment/blob/main/ECG_device/sistema.jpeg))
 
