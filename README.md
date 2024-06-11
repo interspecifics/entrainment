@@ -1,6 +1,6 @@
-'El amor es la experiencia de que los otros no son otros. 
-belleza es la experiencia de que los objetos no son objetos'. 
-Rupert Spira 
+'El amor es la experiencia de que los otros no son otros.   
+belleza es la experiencia de que los objetos no son objetos'.    
+Rupert Spira    
 
     
 interspecifics
@@ -12,9 +12,8 @@ Entrainment es un entorno performativo transmedial que revela estados de coheren
   
 Entrainment is a transmedial performative environment that reveals states of cardiac coherence in response to active and real-time listening to human heartbeats. The performance, presented in three acts, features a group of participants on stage, each equipped with a heart rate variability (HRV) monitor, while a process of sound biofeedback occurs. The loop evolves in cycles of spontaneous rhythmic synchrony with the participants' heartbeats, shaping the piece. Composed live and collaboratively, Entrainment features a subtle melody that shifts from chaos to unison and back.
 
-## Repository structure
+## file structure
 
-##
 [ECG_device](https://github.com/interspecifics/entrainment/tree/main/ECG_device) code, firmware, and specifications that needs to be uploaded to set the ECG device behavior which is basically 1) gather ECG sensor signal, 2) apply real time processing to the signal and 3) broadcast data to the audiovisual performance control mechanisms. 
 Must be uploaded to the ESP32-S2-DevKit-C devices with custom ECG sensor adapters.
 
