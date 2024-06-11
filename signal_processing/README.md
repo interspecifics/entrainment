@@ -2,7 +2,7 @@
 
 python code to process the ECG signal for exploratory data analysis, peak detection, Heart Rate Variability and entrainment analysis.
 
-- [data](signal_processing/data): raw data that was recorded using the custom ESP32 devices.
+- [data](signal_processing/data): raw data, and python code relevant to recording ECG data using the custom ESP32 devices.
 - [hrv_analysis.ipynb](signal_processing/hrv_analysis.ipynb): jupyter notebook for Heart Rate Variability (HRV) analysis.
 - [ml_models](signal_processing/ml_models): trained k means models used to charachterize stages of entrainment coherence.
 - [peak_detection.ipynb](signal_processing/peak_detection.ipynb): jupyter notebook for testing different approaches to heart beat (peak) detection in the ECG data. this resulted in the real time heart beat detection algorithm programmed to run on the microcontrollers in real time.
