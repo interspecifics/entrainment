@@ -2,7 +2,8 @@
 belleza es la experiencia de que los objetos no son objetos'.    
 Rupert Spira    
 
-     ** \-interspecifics**
+** \-interspecifics**
+
 # entrainment
 
 Entrainment es un entorno performativo transmedial que revela estados de coherencia cardíaca en respuesta a la escucha activa y en tiempo real de los latidos del corazón humano. Compuesta en vivo y de manera colaborativa, Entrainment presenta una sutil melodía que refleja sobre procesos de coherencia afectiva llendo del caos al unísono y viceversa.   
