@@ -52,4 +52,4 @@
         [bitalino ecg sensor](https://www.bitalino.com/storage/uploads/media/revolution-ecg-sensor-datasheet-revb-1.pdf)
 
 
-![image](ecg_device/hardware/entrainment_bb.png)
+![image](hardware/entrainment_bb.png)
