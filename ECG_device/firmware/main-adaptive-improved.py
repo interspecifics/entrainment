@@ -161,7 +161,7 @@ while True:
         # Detect heartbeat if derivative exceeds threshold and outside refractory period
         if abs_derivative > threshold and time_since_last_beat > refractory_period_ms:
             # Heartbeat detected
-            osc.send(msg_route, 1, abs_derivative)
+            osc.send(msg_route, 1, pot_value)
             osc2.send(msg_route, 1)
             
             # Update beat intervals for adaptive refractory period
@@ -182,7 +182,7 @@ while True:
                 gc_beat_counter += 1
             
         else:
-            osc.send(msg_route, 0, abs_derivative)
+            osc.send(msg_route, 0, pot_value)
 
         # Compute SNR (simple ratio)
         signal_power = ema_abs_derivative
