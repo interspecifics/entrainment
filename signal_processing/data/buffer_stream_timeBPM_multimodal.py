@@ -155,11 +155,11 @@ if __name__ == "__main__":
 
     # osc server
     server = OSCThreadServer()
-    socket = server.listen(address="0.0.0.0", port=8000, default=True)
-    server.bind(b'/r1', handler_c1, socket)
-    server.bind(b'/r2', handler_c2, socket)
-    server.bind(b'/r3', handler_c3, socket)
-    server.bind(b'/r4', handler_c4, socket)
+    socket = server.listen(address="0.0.0.0", port=8001, default=True)
+    server.bind(b'/c1', handler_c1, socket)
+    server.bind(b'/c2', handler_c2, socket)
+    server.bind(b'/c3', handler_c3, socket)
+    server.bind(b'/c4', handler_c4, socket)
     server.listen()
 
     # Set up the real-time plot

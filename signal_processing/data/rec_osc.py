@@ -20,9 +20,9 @@ def reco1(*values):
     global a1, fs1, ls1
     #print (values)
     if values[0] == 1:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+        l = "{}\t{}\t{}\n".format(values[0], values[1], int(time()))
     else:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
+        l = "{}\t{}\t{}\n".format(values[0], values[1], None)
     ls1.append(l)
     a1 = a1+1
     if a1%100==0:
@@ -35,9 +35,9 @@ def reco2(*values):
     global a2, fs2, ls2
     #print (values)
     if values[0] == 1:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+        l = "{}\t{}\t{}\n".format(values[0], values[1], int(time()))
     else:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
+        l = "{}\t{}\t{}\n".format(values[0], values[1], None)
     ls2.append(l)
     a2 = a2+1
     if a2%100==0:
@@ -50,9 +50,9 @@ def reco3(*values):
     global a3, fs3, ls3
     #print (values)
     if values[0] == 1:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+        l = "{}\t{}\t{}\n".format(values[0], values[1], int(time()))
     else:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
+        l = "{}\t{}\t{}\n".format(values[0], values[1], None)
     ls3.append(l)
     a3 = a3+1
     if a3%100==0:
@@ -65,9 +65,9 @@ def reco4(*values):
     global a4, fs4, ls4
     #print (values)
     if values[0] == 1:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], int(time()))
+        l = "{}\t{}\t{}\n".format(values[0], values[1], int(time()))
     else:
-        l = "{}\t{}\t{}\t{}\n".format(values[0], values[1], values[2], None)
+        l = "{}\t{}\t{}\n".format(values[0], values[1], None)
     ls4.append(l)
     a4 = a4+1
     if a4%100==0:
@@ -97,18 +97,18 @@ fs1 = open(os.path.join(folder_path, "ECG_c1.txt"), 'w+')
 
 # osc server
 server = OSCThreadServer()
-socket = server.listen(address="0.0.0.0", port=8000, default=True)
+socket = server.listen(address="0.0.0.0", port=8001, default=True)
 #server.bind(b'/codex/',     got_message,    socket)
-server.bind(b'/r1', reco1, socket)
-server.bind(b'/r2', reco2, socket)
-server.bind(b'/r3', reco3, socket)
-server.bind(b'/r4', reco4, socket)
+server.bind(b'/c1', reco1, socket)
+server.bind(b'/c2', reco2, socket)
+server.bind(b'/c3', reco3, socket)
+server.bind(b'/c4', reco4, socket)
 server.listen()
 print ("[osc] listening on: {}".format(server.getaddress()))
 ## const init
 
-while(a1<60000 or a2<60000):
-#while(a1<72000 or a2<72000 or a3<72000):
+while(a1<300 and a2<300 and a3<300 and a4<300):
+#while(a1<72000 and a2<72000 or a3<72000):
     b=0
     print (a1,' ',a2,' ',a3,' ',a4)
 

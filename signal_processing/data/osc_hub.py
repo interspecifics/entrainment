@@ -87,9 +87,9 @@ except KeyboardInterrupt:
     print("Server shutdown.")
 
 
-0 mins inicio
-4 mins cargar bebe
-8 mins movimientos
-10 mins ending
+# 0 mins inicio
+# 4 mins cargar bebe
+# 8 mins movimientos
+# 10 mins ending
 
 
