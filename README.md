@@ -5,8 +5,6 @@ Rupert Spira
   
 **interspecifics**
 
-![image](ECG_device/sensores.png)
-
 
 # entrainment
 
