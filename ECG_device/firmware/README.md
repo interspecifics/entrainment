@@ -112,15 +112,3 @@ The device can be configured through the `DeviceConfig` class:
 - Optimized for low memory usage
 - Supports multiple OSC servers
 
-### Future Improvements
-- [ ] Web-based configuration interface
-- [ ] OTA updates
-- [ ] Advanced signal processing
-- [ ] Battery management
-- [ ] Sleep mode optimization
-
-### Contributing
-Please follow the standard development workflow and ensure all changes are properly tested before submission.
-
-### License
-[Add your license information here] 
