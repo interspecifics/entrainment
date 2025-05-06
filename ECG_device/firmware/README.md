@@ -10,6 +10,67 @@
 
 ## Latest Version: 2.0.0
 
+### Pan-Tompkins QRS Detection Algorithm
+
+The firmware implements an optimized version of the Pan-Tompkins algorithm, which is a widely-used method for QRS complex detection in ECG signals. Here's how it works in our implementation:
+
+#### 1. Signal Preprocessing
+- **Bandpass Filtering**: 
+  - Low-pass filter (5-15 Hz) to reduce high-frequency noise
+  - High-pass filter (0.5-5 Hz) to remove baseline wander
+  - Implemented using exponential moving averages for efficiency
+
+#### 2. Signal Processing Steps
+- **Differentiation**:
+  - Computes signal slope to enhance QRS complex
+  - Uses 5-point derivative for real-time processing
+  - Formula: `derivative = (2x[n] + x[n-1] - x[n-3] - 2x[n-4])/8`
+
+- **Squaring**:
+  - Squares the differentiated signal
+  - Makes all values positive
+  - Emphasizes higher frequencies
+
+- **Integration**:
+  - Moving window integration
+  - Window size: 8 samples
+  - Smoothes the signal while preserving QRS information
+
+#### 3. Adaptive Thresholding
+- **Dynamic Thresholds**:
+  - Signal level (SPKI): Updated when QRS is detected
+  - Noise level (NPKI): Updated during non-QRS periods
+  - Formula: `threshold = NPKI + 0.25(SPKI - NPKI)`
+
+- **Refractory Period**:
+  - 350ms after each QRS detection
+  - Prevents multiple detections of the same beat
+  - Adjusts based on heart rate
+
+#### 4. Search Back
+- **Backward Search**:
+  - If no QRS detected for 1.5x average RR interval
+  - Threshold is reduced by 50%
+  - Searches for missed beats
+
+#### 5. Performance Optimizations
+- **Memory Efficiency**:
+  - Ring buffer implementation
+  - Fixed-point arithmetic
+  - Minimal memory allocation
+
+- **Real-time Processing**:
+  - 500Hz sampling rate
+  - < 2ms processing delay
+  - Efficient modulo operations
+
+#### 6. Quality Assessment
+- **Signal Quality Metrics**:
+  - SNR calculation
+  - Amplitude validation
+  - Stability assessment
+  - Quality score (0-1)
+
 ### Files Included
 ```
 firmware/
