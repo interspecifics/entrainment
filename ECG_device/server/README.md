@@ -208,13 +208,3 @@ The server sends data to:
 - Log level: INFO
 - Includes errors and warnings
 
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
-## License
-MIT License
-
-## Contact
-For support and questions, please open an issue in the repository. 
