@@ -12,7 +12,10 @@ class DeviceConfig:
             'osc_server1_ip': "192.168.1.81",
             'osc_server1_port': 8001,
             'osc_server2_ip': "192.168.1.81",
-            'osc_server2_port': 8002
+            'osc_server2_port': 8002,
+            'ntp_server': "pool.ntp.org",
+            'ntp_sync_interval': 3600,  # Sync every hour
+            'timezone_offset': 0  # UTC offset in seconds
         }
         self._init_config()
     
@@ -34,6 +37,9 @@ class DeviceConfig:
         self.nvs.set_i32('osc_server1_port', self.default_config['osc_server1_port'])
         self.nvs.set_str('osc_server2_ip', self.default_config['osc_server2_ip'])
         self.nvs.set_i32('osc_server2_port', self.default_config['osc_server2_port'])
+        self.nvs.set_str('ntp_server', self.default_config['ntp_server'])
+        self.nvs.set_i32('ntp_sync_interval', self.default_config['ntp_sync_interval'])
+        self.nvs.set_i32('timezone_offset', self.default_config['timezone_offset'])
         self.nvs.commit()
     
     def get_device_id(self):
@@ -88,4 +94,19 @@ class DeviceConfig:
     def factory_reset(self):
         """Reset configuration to default values"""
         self.nvs.erase_all()
-        self._write_default_config() 
+        self._write_default_config()
+    
+    def get_ntp_config(self):
+        """Get NTP configuration"""
+        return {
+            'server': self.nvs.get_str('ntp_server'),
+            'sync_interval': self.nvs.get_i32('ntp_sync_interval'),
+            'timezone_offset': self.nvs.get_i32('timezone_offset')
+        }
+    
+    def set_ntp_config(self, server, sync_interval, timezone_offset):
+        """Set NTP configuration"""
+        self.nvs.set_str('ntp_server', server)
+        self.nvs.set_i32('ntp_sync_interval', sync_interval)
+        self.nvs.set_i32('timezone_offset', timezone_offset)
+        self.nvs.commit() 

@@ -1,12 +1,17 @@
 from machine import Pin, ADC, Timer
-from time import sleep, ticks_ms, ticks_diff, ticks_us
+from time import sleep, ticks_ms, ticks_diff, ticks_us, time
 from uosc.client import Client, Bundle
 from neopixel import NeoPixel
 import gc
 import json
 import array
 import math
+import ntptime
 from device_config import DeviceConfig
+import micropython
+
+# Enable memory monitoring
+micropython.alloc_emergency_exception_buf(100)
 
 # Configuration class for better parameter management
 class Config:
@@ -17,6 +22,7 @@ class Config:
         self.advolt = 6500
         self.osc_servers = device_config.get_osc_servers()
         self.wifi = device_config.get_wifi_config()
+        self.ntp_config = device_config.get_ntp_config()
         self.sampling_rate = 500  # Hz
         self.buffer_size = 32  # Power of 2 for efficient modulo operations
         self.alpha = 0.1
@@ -30,6 +36,8 @@ class Config:
         self.signal_quality_window = 50  # Window size for signal quality metrics
         self.min_signal_amplitude = 100  # Minimum amplitude for valid signal
         self.max_signal_amplitude = 3000  # Maximum amplitude for valid signal
+        self.time_offset = 0  # Offset between local and NTP time
+        self.gc_threshold = 10000  # Memory threshold for garbage collection
 
 # Ring Buffer implementation for efficient sampling
 class RingBuffer:
@@ -83,6 +91,10 @@ class QRSDetector:
         self.noise_level = 0
         self.average_rr_interval = 1000
         
+        # Time synchronization
+        self.last_ntp_sync = 0
+        self.time_offset = 0
+        
         # Signal quality metrics
         self.signal_quality_buffer = array.array('i', [0] * config.signal_quality_window)
         self.signal_quality_index = 0
@@ -90,7 +102,7 @@ class QRSDetector:
         self.signal_quality_count = 0
         
         # Initialize processing buffer
-        self.processing_buffer = array.array('i', [0] * 8)  # Smaller buffer for processing
+        self.processing_buffer = array.array('i', [0] * 8)
         self.buffer_index = 0
         
         # Initialize network clients
@@ -103,6 +115,13 @@ class QRSDetector:
         # Initialize timer for sampling
         self.sampling_timer = Timer(0)
         self.last_sync_time = ticks_ms()
+        
+        # Memory monitoring
+        self.last_memory_check = ticks_ms()
+        self.memory_warning_threshold = 100000  # 100KB
+        
+        # Initial NTP sync
+        self.sync_ntp_time()
         
     def setup_network(self):
         """Setup network connection and OSC clients"""
@@ -143,13 +162,25 @@ class QRSDetector:
         self.npx[0] = self.co1
         self.npx.write()
     
+    def check_memory(self):
+        """Check memory usage and trigger GC if needed"""
+        current_time = ticks_ms()
+        if ticks_diff(current_time, self.last_memory_check) > 5000:  # Check every 5 seconds
+            self.last_memory_check = current_time
+            free_memory = gc.mem_free()
+            if free_memory < self.memory_warning_threshold:
+                print(f"Low memory warning: {free_memory} bytes free")
+                gc.collect()
+                print(f"After GC: {gc.mem_free()} bytes free")
+    
     def sampling_isr(self, timer):
         """Timer ISR for sampling ECG signal"""
         if not self.sample_buffer.lock:
             self.sample_buffer.lock = True
             try:
                 value = self.pot.read()
-                self.sample_buffer.push(value)
+                if not self.sample_buffer.push(value):
+                    print("Buffer full, sample dropped")
             finally:
                 self.sample_buffer.lock = False
     
@@ -252,45 +283,61 @@ class QRSDetector:
         
         return quality_score
 
+    def sync_ntp_time(self):
+        """Synchronize time with NTP server"""
+        try:
+            ntptime.host = self.config.ntp_config['server']
+            ntptime.settime()
+            # Calculate offset between local time and NTP time
+            self.time_offset = time() - (ticks_ms() // 1000)
+            self.last_ntp_sync = ticks_ms()
+            print(f"Time synchronized with NTP. Offset: {self.time_offset}s")
+        except Exception as e:
+            print(f"NTP sync failed: {e}")
+
+    def get_synchronized_time(self):
+        """Get current time synchronized with NTP"""
+        current_ms = ticks_ms()
+        if current_ms - self.last_ntp_sync > self.config.ntp_config['sync_interval'] * 1000:
+            self.sync_ntp_time()
+        return (current_ms // 1000) + self.time_offset
+
     def send_data(self, beat_detected, pot_value, filtered_signal):
         """Send data to all OSC clients with optimized bundle"""
-        current_time = ticks_ms()
-        signal_quality = self.calculate_signal_quality(filtered_signal)
-        
-        # Create standardized message format
-        message = {
-            'device_id': self.config.id,
-            'timestamp': current_time,
-            'raw_value': pot_value,
-            'filtered_value': filtered_signal,
-            'signal_quality': signal_quality,
-            'is_beat': beat_detected,
-            'rr_interval': ticks_diff(current_time, self.last_beat_time) if beat_detected else 0
-        }
-        
-        # Convert to JSON string
-        message_json = json.dumps(message)
-        
-        # Send to all clients
-        for client in self.osc_clients:
-            try:
-                if beat_detected:
-                    client.send(f"/beat/{self.config.id}", message_json)
-                else:
-                    client.send(f"/signal/{self.config.id}", message_json)
-            except Exception as e:
-                print(f"Error sending to {client}: {e}")
-    
-    def sync_time(self):
-        """Synchronize time with other devices"""
-        current_time = ticks_ms()
-        if ticks_diff(current_time, self.last_sync_time) >= self.config.sync_interval:
+        try:
+            current_time = self.get_synchronized_time()
+            signal_quality = self.calculate_signal_quality(filtered_signal)
+            
+            # Create message with minimal memory allocation
+            message = {
+                'device_id': self.config.id,
+                'timestamp': current_time,
+                'local_ms': ticks_ms(),
+                'raw_value': pot_value,
+                'filtered_value': filtered_signal,
+                'signal_quality': signal_quality,
+                'is_beat': beat_detected,
+                'rr_interval': ticks_diff(ticks_ms(), self.last_beat_time) if beat_detected else 0,
+                'time_offset': self.time_offset
+            }
+            
+            # Convert to JSON string
+            message_json = json.dumps(message)
+            
+            # Send to all clients
             for client in self.osc_clients:
                 try:
-                    client.send(f"/sync{self.config.id}", ticks_us())
+                    if beat_detected:
+                        client.send(f"/beat/{self.config.id}", message_json)
+                    else:
+                        client.send(f"/signal/{self.config.id}", message_json)
                 except Exception as e:
-                    print(f"Error sending sync: {e}")
-            self.last_sync_time = current_time
+                    print(f"Error sending to {client}: {e}")
+                    # Attempt to reconnect
+                    self.setup_network()
+        except Exception as e:
+            print(f"Error in send_data: {e}")
+            gc.collect()  # Try to recover memory
     
     def run(self):
         """Main processing loop"""
@@ -304,6 +351,9 @@ class QRSDetector:
         
         while True:
             try:
+                # Check memory usage
+                self.check_memory()
+                
                 # Process samples from buffer
                 while not self.sample_buffer.is_empty():
                     pot_value = self.sample_buffer.pop()
@@ -318,9 +368,6 @@ class QRSDetector:
                         if ignore_counter > 0:
                             ignore_counter -= 1
                 
-                # Synchronize time
-                self.sync_time()
-                
                 # Garbage collection
                 gc_beat_counter += 1
                 if gc_beat_counter > 10:
@@ -332,11 +379,15 @@ class QRSDetector:
                 
             except Exception as e:
                 print('Error in main loop:', e)
+                gc.collect()  # Try to recover memory
                 sleep(1)  # Wait before retrying
 
 # Main execution
 if __name__ == "__main__":
     try:
+        # Initial garbage collection
+        gc.collect()
+        
         config = Config()
         detector = QRSDetector(config)
         detector.run()

@@ -42,6 +42,11 @@ class DeviceConfig:
     clock_offset: float = 0.0
     jitter: float = 0.0
     last_sync: float = 0.0
+    last_message: float = 0.0
+    message_count: int = 0
+    error_count: int = 0
+    signal_quality: float = 0.0
+    is_connected: bool = False
 
 class JitterBuffer:
     """Handles jitter and synchronization for each device"""
@@ -51,35 +56,39 @@ class JitterBuffer:
         self.clock_offset = 0
         self.jitter = 0
         self.lock = threading.Lock()
-        self.sync_history = deque(maxlen=100)  # Store sync history
+        self.sync_history = deque(maxlen=100)
         self.clock_drift = 0
         self.last_sync_time = 0
+        self.message_gaps = deque(maxlen=100)
+        self.last_message_time = 0
     
-    def add_sample(self, sample: float, timestamp: float):
+    def add_sample(self, sample: float, timestamp: float, signal_quality: float):
         with self.lock:
             adjusted_time = timestamp + self.clock_offset
-            self.buffer.append((adjusted_time, sample))
+            self.buffer.append((adjusted_time, sample, signal_quality))
             self._update_jitter(timestamp)
+            self._update_message_gaps(timestamp)
     
-    def get_samples(self, start_time: float, end_time: float) -> List[float]:
+    def get_samples(self, start_time: float, end_time: float) -> List[Tuple[float, float, float]]:
         with self.lock:
-            return [s for t, s in self.buffer if start_time <= t <= end_time]
+            return [(t, s, q) for t, s, q in self.buffer if start_time <= t <= end_time]
     
     def _update_jitter(self, timestamp: float):
         if self.last_timestamp:
             delay = timestamp - self.last_timestamp
-            self.jitter = 0.9 * self.jitter + 0.1 * abs(delay - (1/500))  # Assuming 500Hz
+            self.jitter = 0.9 * self.jitter + 0.1 * abs(delay - (1/500))
         self.last_timestamp = timestamp
     
-    def update_clock_offset(self, offset: float, server_time: float):
-        with self.lock:
-            if self.last_sync_time:
-                # Calculate clock drift
-                time_diff = server_time - self.last_sync_time
-                self.clock_drift = (offset - self.clock_offset) / time_diff
-            self.clock_offset = offset
-            self.last_sync_time = server_time
-            self.sync_history.append((server_time, offset))
+    def _update_message_gaps(self, timestamp: float):
+        if self.last_message_time:
+            gap = timestamp - self.last_message_time
+            self.message_gaps.append(gap)
+        self.last_message_time = timestamp
+    
+    def get_message_gap_stats(self) -> Tuple[float, float]:
+        if not self.message_gaps:
+            return 0.0, 0.0
+        return np.mean(self.message_gaps), np.std(self.message_gaps)
 
 class MLPredictor(nn.Module):
     """Neural network for ECG signal prediction"""
@@ -101,7 +110,9 @@ class ECGServer:
         self.sample_queues: Dict[int, queue.Queue] = {}
         self.running = False
         self.master_time = time.time()
-        self.sync_interval = 1.0  # Sync every second
+        self.sync_interval = 1.0
+        self.max_message_gap = 0.1  # 100ms
+        self.reconnect_timeout = 5.0  # 5 seconds
         
         # Initialize ML model
         self.model = MLPredictor()
@@ -171,11 +182,30 @@ class ECGServer:
         for spine in self.ax_status.spines.values():
             spine.set_edgecolor('black')
             spine.set_linewidth(2)
-        # Optionally, leave gs[2,1] and gs[2,2] empty for now
-        self.ax_empty1 = self.fig.add_subplot(gs[2, 1])
-        self.ax_empty1.axis('off')
-        self.ax_empty2 = self.fig.add_subplot(gs[2, 2])
-        self.ax_empty2.axis('off')
+
+        # New device status box
+        self.ax_device_status = self.fig.add_subplot(gs[2, 1])
+        self.ax_device_status.set_title('Device Status', fontsize=12, color='black')
+        self.ax_device_status.axis('on')
+        self.ax_device_status.set_xticks([])
+        self.ax_device_status.set_yticks([])
+        for spine in self.ax_device_status.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(2)
+        
+        # Device status text
+        self.device_status_text = self.ax_device_status.text(
+            0.01, 0.99, '', 
+            ha='left', va='top', 
+            fontsize=10, 
+            family='monospace',
+            color='black',
+            transform=self.ax_device_status.transAxes
+        )
+
+        # Leave the last cell empty for future use
+        self.ax_empty = self.fig.add_subplot(gs[2, 2])
+        self.ax_empty.axis('off')
 
         # Color palette
         colors = ['r', 'g', 'b', 'y', 'm']
@@ -252,12 +282,154 @@ class ECGServer:
         except KeyboardInterrupt:
             self.stop()
     
+    def _handle_packet(self, data: bytes, addr: tuple):
+        """Handle incoming UDP packets with improved error handling"""
+        try:
+            packet = json.loads(data.decode())
+            
+            # Verify required fields
+            required_fields = ['device_id', 'timestamp', 'raw_value', 'filtered_value', 
+                             'signal_quality', 'is_beat', 'rr_interval', 'time_offset']
+            
+            if not all(field in packet for field in required_fields):
+                logger.error(f"Missing required fields in packet from {addr}")
+                return
+            
+            device_id = packet['device_id']
+            
+            # Handle device registration or reconnection
+            if device_id not in self.devices:
+                self._register_device(device_id, addr[0], addr[1])
+            elif not self.devices[device_id].is_connected:
+                self._handle_reconnection(device_id, addr[0], addr[1])
+            
+            # Update device status
+            device = self.devices[device_id]
+            device.last_message = time.time()
+            device.message_count += 1
+            device.signal_quality = packet['signal_quality']
+            
+            # Check for message gaps
+            if device.last_message and (time.time() - device.last_message) > self.max_message_gap:
+                logger.warning(f"Message gap detected for device {device_id}")
+                device.error_count += 1
+            
+            # Add sample to processing queue
+            self.sample_queues[device_id].put((
+                packet['timestamp'],
+                packet['raw_value'],
+                packet['filtered_value'],
+                packet['signal_quality'],
+                packet['is_beat'],
+                packet['rr_interval'],
+                packet['time_offset']
+            ))
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from {addr}: {e}")
+        except Exception as e:
+            logger.error(f"Error handling packet from {addr}: {e}")
+    
+    def _handle_reconnection(self, device_id: int, ip: str, port: int):
+        """Handle device reconnection"""
+        device = self.devices[device_id]
+        if device.ip != ip or device.port != port:
+            logger.info(f"Device {device_id} reconnected from {ip}:{port}")
+            device.ip = ip
+            device.port = port
+        device.is_connected = True
+        device.error_count = 0
+    
+    def _process_samples(self):
+        """Process samples from all devices"""
+        while self.running:
+            for device_id, queue in self.sample_queues.items():
+                try:
+                    while not queue.empty():
+                        timestamp, raw_value, filtered_value, signal_quality, is_beat, rr_interval, time_offset = queue.get_nowait()
+                        self._process_device_sample(device_id, timestamp, raw_value, filtered_value, signal_quality, is_beat, rr_interval, time_offset)
+                except queue.Empty:
+                    continue
+            time.sleep(0.001)
+    
+    def _process_device_sample(self, device_id: int, timestamp: float, raw_value: float, 
+                             filtered_value: float, signal_quality: float, is_beat: bool, 
+                             rr_interval: float, time_offset: float):
+        """Process a single sample from a device with improved error handling"""
+        try:
+            # Add to jitter buffer
+            self.jitter_buffers[device_id].add_sample(filtered_value, timestamp, signal_quality)
+            
+            # Get recent samples for prediction
+            recent_samples = self.jitter_buffers[device_id].get_samples(
+                timestamp - 0.1, timestamp
+            )
+            
+            if len(recent_samples) >= 10:
+                # Prepare input for ML model
+                input_data = np.array([s[1] for s in recent_samples[-10:]])
+                
+                # Make prediction using ML engine
+                prediction = self.ml_engine.predict_signal(input_data)
+                
+                # Update visualization data
+                self.ecg_data[device_id].append(filtered_value)
+                self.times[device_id].append(timestamp)
+                self.prediction_data[device_id].append(prediction[0])
+                self.actual_data[device_id].append(filtered_value)
+                
+                # Update ML status
+                self.ml_status['prediction_confidence'][device_id] = 1.0 - np.abs(prediction[0] - filtered_value) / 1000.0
+                
+                # Calculate heart rate if beat detected
+                if is_beat:
+                    hr = 60 / (rr_interval / 1000)  # Convert ms to seconds
+                    self.hr_data[device_id].append(hr)
+                
+                # Analyze entrainment if we have multiple devices
+                if len(self.devices) > 1:
+                    signals = {
+                        dev_id: np.array(list(self.ecg_data[dev_id]))
+                        for dev_id in self.devices
+                        if len(self.ecg_data[dev_id]) > 0
+                    }
+                    if len(signals) > 1:
+                        entrainment_results = self.ml_engine.analyze_entrainment(signals)
+                        self._update_entrainment_visualization(entrainment_results)
+                
+                # Send to Max/MSP and TouchDesigner
+                self._send_to_clients(device_id, filtered_value, prediction[0], is_beat, rr_interval)
+                
+        except Exception as e:
+            logger.error(f"Error processing sample from device {device_id}: {e}")
+            self.devices[device_id].error_count += 1
+    
+    def _send_to_clients(self, device_id: int, value: float, prediction: float, 
+                        is_beat: bool, rr_interval: float):
+        """Send data to Max/MSP and TouchDesigner with improved error handling"""
+        for client_name, client in self.osc_clients.items():
+            try:
+                client.send_message(f"/ecg/{device_id}/raw", value)
+                client.send_message(f"/ecg/{device_id}/prediction", prediction)
+                if is_beat:
+                    client.send_message(f"/ecg/{device_id}/beat", 1)
+                    client.send_message(f"/ecg/{device_id}/rr", rr_interval)
+            except Exception as e:
+                logger.error(f"Error sending to {client_name}: {e}")
+    
     def _sync_devices(self):
         """Synchronize all devices with master clock"""
         while self.running:
             current_time = time.time()
             for device_id, device in self.devices.items():
                 try:
+                    # Check for device timeout
+                    if device.is_connected and (current_time - device.last_message) > self.reconnect_timeout:
+                        logger.warning(f"Device {device_id} timeout")
+                        device.is_connected = False
+                        device.error_count += 1
+                        continue
+                    
                     # Send sync message to device
                     sync_msg = {
                         'type': 'sync',
@@ -280,134 +452,9 @@ class ECGServer:
                     
                 except Exception as e:
                     logger.error(f"Error syncing device {device_id}: {e}")
+                    device.error_count += 1
             
             time.sleep(self.sync_interval)
-    
-    def _handle_packet(self, data: bytes, addr: tuple):
-        """Handle incoming UDP packets"""
-        try:
-            packet = json.loads(data.decode())
-            
-            if packet.get('type') == 'sync_response':
-                # Handle sync response
-                device_id = packet['device_id']
-                device_time = packet['device_time']
-                server_time = packet['server_time']
-                
-                # Calculate clock offset
-                current_time = time.time()
-                round_trip_time = current_time - server_time
-                clock_offset = (device_time + round_trip_time/2) - current_time
-                
-                if device_id in self.jitter_buffers:
-                    self.jitter_buffers[device_id].update_clock_offset(clock_offset, current_time)
-            
-            else:
-                # Handle regular data packet
-                device_id = packet['device_id']
-                timestamp = packet['timestamp']
-                sample = packet['sample']
-                
-                if device_id not in self.devices:
-                    self._register_device(device_id, addr[0], addr[1])
-                
-                self.sample_queues[device_id].put((timestamp, sample))
-            
-        except Exception as e:
-            logger.error(f"Error handling packet: {e}")
-    
-    def _register_device(self, device_id: int, ip: str, port: int):
-        """Register a new device"""
-        self.devices[device_id] = DeviceConfig(device_id, ip, port)
-        self.jitter_buffers[device_id] = JitterBuffer()
-        self.sample_queues[device_id] = queue.Queue()
-        logger.info(f"Registered device {device_id} at {ip}:{port}")
-    
-    def _process_samples(self):
-        """Process samples from all devices"""
-        while self.running:
-            for device_id, queue in self.sample_queues.items():
-                try:
-                    while not queue.empty():
-                        timestamp, sample = queue.get_nowait()
-                        self._process_device_sample(device_id, timestamp, sample)
-                except queue.Empty:
-                    continue
-            time.sleep(0.001)
-    
-    def _process_device_sample(self, device_id: int, timestamp: float, sample: float):
-        """Process a single sample from a device"""
-        # Add to jitter buffer
-        self.jitter_buffers[device_id].add_sample(sample, timestamp)
-        
-        # Get recent samples for prediction
-        recent_samples = self.jitter_buffers[device_id].get_samples(
-            timestamp - 0.1, timestamp
-        )
-        
-        if len(recent_samples) >= 10:
-            # Prepare input for ML model
-            input_data = np.array(recent_samples[-10:])
-            
-            # Make prediction using ML engine
-            prediction = self.ml_engine.predict_signal(input_data)
-            
-            # Update visualization data
-            self.ecg_data[device_id].append(sample)
-            self.times[device_id].append(timestamp)
-            self.prediction_data[device_id].append(prediction[0])
-            self.actual_data[device_id].append(sample)
-            
-            # Update ML status
-            self.ml_status['prediction_confidence'][device_id] = 1.0 - np.abs(prediction[0] - sample) / 1000.0
-            
-            # Calculate heart rate
-            if len(self.ecg_data[device_id]) > 1:
-                peaks = self._find_peaks(list(self.ecg_data[device_id]))
-                if len(peaks) >= 2:
-                    intervals = np.diff(peaks)
-                    hr = 60 / (np.mean(intervals) / 500)  # Assuming 500Hz sampling
-                    self.hr_data[device_id].append(hr)
-            
-            # Analyze entrainment if we have multiple devices
-            if len(self.devices) > 1:
-                signals = {
-                    dev_id: np.array(list(self.ecg_data[dev_id]))
-                    for dev_id in self.devices
-                    if len(self.ecg_data[dev_id]) > 0
-                }
-                if len(signals) > 1:
-                    entrainment_results = self.ml_engine.analyze_entrainment(signals)
-                    self._update_entrainment_visualization(entrainment_results)
-                    
-                    # Update sync detection status
-                    for (id1, id2), score in entrainment_results.items():
-                        self.ml_status['sync_detection'][id1] = score.overall_score
-                        self.ml_status['sync_detection'][id2] = score.overall_score
-            
-            # Update ML status
-            self.ml_status['last_update'] = time.time()
-            self._update_ml_status()
-            
-            # Send to Max/MSP and TouchDesigner
-            self._send_to_clients(device_id, sample, prediction)
-    
-    def _find_peaks(self, signal: List[float], threshold: float = 0.5) -> List[int]:
-        """Simple peak detection"""
-        peaks = []
-        for i in range(1, len(signal)-1):
-            if signal[i] > threshold and signal[i] > signal[i-1] and signal[i] > signal[i+1]:
-                peaks.append(i)
-        return peaks
-    
-    def _send_to_clients(self, device_id: int, sample: float, prediction: float):
-        """Send data to Max/MSP and TouchDesigner"""
-        for client_name, client in self.osc_clients.items():
-            try:
-                client.send_message(f"/ecg/{device_id}/raw", sample)
-                client.send_message(f"/ecg/{device_id}/prediction", prediction)
-            except Exception as e:
-                logger.error(f"Error sending to {client_name}: {e}")
     
     def _update_entrainment_visualization(self, entrainment_results):
         """Update the entrainment and ML status panel, and the circular plot."""
@@ -451,7 +498,7 @@ class ECGServer:
         self.status_text.set_text(text)
     
     def _update_ml_status(self):
-        """Update ML engine status information"""
+        """Update ML engine status information with device health"""
         status_text = "ML Engine Status:\n\n"
         
         # Model loading status
@@ -459,13 +506,20 @@ class ECGServer:
         
         # Device-specific status
         for device_id in self.devices:
+            device = self.devices[device_id]
+            status_text += f"\nDevice {device_id}:\n"
+            status_text += f"  Connected: {'Yes' if device.is_connected else 'No'}\n"
+            status_text += f"  Signal Quality: {device.signal_quality:.2%}\n"
+            status_text += f"  Error Count: {device.error_count}\n"
+            status_text += f"  Message Count: {device.message_count}\n"
+            
             if device_id in self.ml_status['prediction_confidence']:
                 conf = self.ml_status['prediction_confidence'][device_id]
-                status_text += f"\nDevice {device_id}:\n"
                 status_text += f"  Prediction Confidence: {conf:.2%}\n"
-                if device_id in self.ml_status['sync_detection']:
-                    sync = self.ml_status['sync_detection'][device_id]
-                    status_text += f"  Sync Detection: {sync:.2%}\n"
+            
+            if device_id in self.ml_status['sync_detection']:
+                sync = self.ml_status['sync_detection'][device_id]
+                status_text += f"  Sync Detection: {sync:.2%}\n"
         
         # Last update time
         elapsed = time.time() - self.ml_status['last_update']
@@ -473,6 +527,39 @@ class ECGServer:
         
         self.status_text.set_text(status_text)
     
+    def _update_device_status(self):
+        """Update the device status display"""
+        status_text = "Device Status:\n\n"
+        
+        for device_id, device in self.devices.items():
+            # Get connection status with color
+            connection_status = "🟢 Connected" if device.is_connected else "🔴 Disconnected"
+            
+            # Get signal quality with color
+            if device.signal_quality > 0.8:
+                quality_color = "🟢"
+            elif device.signal_quality > 0.5:
+                quality_color = "🟡"
+            else:
+                quality_color = "🔴"
+            
+            # Format device info
+            status_text += f"Device {device_id}:\n"
+            status_text += f"  Status: {connection_status}\n"
+            status_text += f"  Signal: {quality_color} {device.signal_quality:.1%}\n"
+            status_text += f"  IP: {device.ip}:{device.port}\n"
+            status_text += f"  Messages: {device.message_count}\n"
+            status_text += f"  Errors: {device.error_count}\n"
+            
+            # Add message gap info if available
+            if device_id in self.jitter_buffers:
+                mean_gap, std_gap = self.jitter_buffers[device_id].get_message_gap_stats()
+                status_text += f"  Avg Gap: {mean_gap*1000:.1f}ms ±{std_gap*1000:.1f}ms\n"
+            
+            status_text += "\n"
+        
+        self.device_status_text.set_text(status_text)
+
     def _update_plot(self, frame):
         """Update the visualization"""
         for device_id in self.devices:
@@ -505,22 +592,28 @@ class ECGServer:
                         list(range(len(self.actual_data[device_id]))),
                         list(self.actual_data[device_id])
                     )
+        
+        # Update device status
+        self._update_device_status()
+        
         # Only show x-labels on bottom row
         plt.setp(self.ax_ecg.get_xticklabels(), visible=False)
         plt.setp(self.ax_hr.get_xticklabels(), visible=False)
         plt.setp(self.ax_offset.get_xticklabels(), visible=False)
         plt.setp(self.ax_jitter.get_xticklabels(), visible=False)
+        
         # Autoscale
         for ax in [self.ax_ecg, self.ax_hr, self.ax_pred, self.ax_offset, self.ax_jitter]:
             ax.relim()
             ax.autoscale_view()
+        
         return (list(self.lines.values()) +
                 list(self.hr_lines.values()) +
                 list(self.offset_lines.values()) +
                 list(self.jitter_lines.values()) +
                 list(self.prediction_lines.values()) +
                 list(self.actual_lines.values()) +
-                [self.status_text])
+                [self.status_text, self.device_status_text])
 
     def stop(self):
         """Cleanly stop the server and all resources"""
