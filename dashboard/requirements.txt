@@ -1,0 +1,6 @@
+# Requirements for Real-time Heart Rate Variability Entrainment Analysis
+numpy>=1.20.0
+scipy>=1.6.0
+pyqtgraph>=0.12.0
+PyQt5>=5.15.0
+python-osc>=1.8.0
